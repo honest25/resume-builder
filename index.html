@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Resume Builder</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#2563eb', // Blue-600
+                        secondary: '#475569', // Slate-600
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Custom Scrollbar for form */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+        /* Resume Preview A4 Aspect Ratio styling */
+        .a4-container {
+            width: 100%;
+            max-width: 794px; /* A4 width at 96dpi */
+            min-height: 1123px; /* A4 height */
+            background: white;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            margin: 0 auto;
+            padding: 40px;
+            box-sizing: border-box;
+        }
+        
+        /* Font classes for templates */
+        .font-sans { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+        .font-serif { font-family: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif; }
+        .font-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+
+        /* Loader Animation */
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 h-screen flex flex-col font-sans overflow-hidden">
+
+    <header class="bg-white shadow-sm border-b border-slate-200 py-3 px-6 flex justify-between items-center z-10">
+        <div class="flex items-center gap-2 text-primary font-bold text-xl">
+            <i class="fa-solid fa-file-signature"></i> AI Resume Builder
+        </div>
+        <div class="flex gap-3">
+            <button onclick="saveProgress()" class="text-sm font-medium text-slate-600 hover:text-primary transition"><i class="fa-regular fa-floppy-disk mr-1"></i> Save Progress</button>
+            <button onclick="loadProgress()" class="text-sm font-medium text-slate-600 hover:text-primary transition"><i class="fa-solid fa-cloud-arrow-down mr-1"></i> Load Saved</button>
+        </div>
+    </header>
+
+    <main class="flex-1 flex flex-col lg:flex-row overflow-hidden">
+        
+        <section class="w-full lg:w-1/3 bg-white border-r border-slate-200 flex flex-col h-full z-10 overflow-y-auto">
+            
+            <div class="px-6 py-4 bg-slate-50 border-b border-slate-200">
+                <div class="flex justify-between mb-2">
+                    <span class="text-xs font-semibold text-primary uppercase tracking-wider" id="step-indicator">Step 1 of 5</span>
+                    <span class="text-xs font-semibold text-slate-500" id="step-title">Personal Info</span>
+                </div>
+                <div class="w-full bg-slate-200 rounded-full h-1.5">
+                    <div class="bg-primary h-1.5 rounded-full transition-all duration-300" id="progress-bar" style="width: 20%"></div>
+                </div>
+            </div>
+
+            <div class="p-6 flex-1">
+                <form id="resume-form" oninput="updatePreviewLive()">
+                    
+                    <div class="step-content" id="step-1">
+                        <h2 class="text-lg font-bold mb-4 text-slate-800">Personal Information</h2>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Full Name</label>
+                                <input type="text" id="p-name" class="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent" placeholder="John Doe">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Email</label>
+                                <input type="email" id="p-email" class="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent" placeholder="john@example.com">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Phone Number</label>
+                                <input type="text" id="p-phone" class="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent" placeholder="+1 (555) 123-4567">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Professional Summary</label>
+                                <textarea id="p-summary" rows="4" class="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent" placeholder="Brief overview of your career..."></textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="step-content hidden" id="step-2">
+                        <h2 class="text-lg font-bold mb-4 text-slate-800">Work Experience</h2>
+                        <div id="experience-container" class="space-y-6">
+                            </div>
+                        <button type="button" onclick="addExperience()" class="mt-4 w-full py-2 border-2 border-dashed border-slate-300 text-slate-500 rounded-md hover:border-primary hover:text-primary transition font-medium">
+                            <i class="fa-solid fa-plus mr-1"></i> Add Experience
+                        </button>
+                    </div>
+
+                    <div class="step-content hidden" id="step-3">
+                        <h2 class="text-lg font-bold mb-4 text-slate-800">Education</h2>
+                        <div id="education-container" class="space-y-6">
+                            </div>
+                        <button type="button" onclick="addEducation()" class="mt-4 w-full py-2 border-2 border-dashed border-slate-300 text-slate-500 rounded-md hover:border-primary hover:text-primary transition font-medium">
+                            <i class="fa-solid fa-plus mr-1"></i> Add Education
+                        </button>
+                    </div>
+
+                    <div class="step-content hidden" id="step-4">
+                        <h2 class="text-lg font-bold mb-4 text-slate-800">Skills & Projects</h2>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Skills (comma separated)</label>
+                                <textarea id="s-skills" rows="3" class="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent" placeholder="JavaScript, React, Project Management..."></textarea>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Projects / Certifications (Optional)</label>
+                                <textarea id="s-projects" rows="4" class="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent" placeholder="AWS Certified Solutions Architect&#10;Built a full-stack e-commerce app..."></textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="step-content hidden" id="step-5">
+                        <h2 class="text-lg font-bold mb-4 text-slate-800">Finalize & Optimize</h2>
+                        
+                        <div class="bg-blue-50 border border-blue-200 p-4 rounded-md mb-6">
+                            <h3 class="font-bold text-blue-800 flex items-center mb-2"><i class="fa-solid fa-wand-magic-sparkles mr-2"></i> AI Assistant</h3>
+                            <p class="text-sm text-blue-700 mb-3">Let AI review your experience bullet points, fix grammar, and make them more impactful.</p>
+                            <button type="button" onclick="triggerAIOptimization()" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-md font-medium transition shadow-sm">
+                                Optimize Resume with AI
+                            </button>
+                        </div>
+
+                        <div class="space-y-4 border-t border-slate-200 pt-4">
+                            <h3 class="font-bold text-slate-800">Formatting</h3>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Theme Color</label>
+                                <input type="color" id="f-color" value="#2563eb" class="w-full h-10 p-1 border border-slate-300 rounded-md cursor-pointer">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Font Family</label>
+                                <select id="f-font" class="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
+                                    <option value="font-sans">Modern (Sans-Serif)</option>
+                                    <option value="font-serif">Classic (Serif)</option>
+                                    <option value="font-mono">Technical (Monospace)</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+
+            <div class="p-6 bg-slate-50 border-t border-slate-200 flex justify-between mt-auto">
+                <button id="btn-prev" onclick="changeStep(-1)" class="px-4 py-2 border border-slate-300 text-slate-600 rounded-md hover:bg-slate-100 transition hidden font-medium">Back</button>
+                <div class="flex-1"></div> <button id="btn-next" onclick="changeStep(1)" class="px-6 py-2 bg-slate-800 text-white rounded-md hover:bg-slate-900 transition font-medium">Next Step</button>
+                <button id="btn-download" onclick="downloadResume()" class="px-6 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 transition font-medium shadow-md hidden flex items-center gap-2">
+                    <i class="fa-solid fa-download"></i> Download PDF
+                </button>
+            </div>
+        </section>
+
+        <section class="w-full lg:w-2/3 bg-slate-100 h-full overflow-y-auto p-4 lg:p-8 flex justify-center items-start">
+            <div id="resume-document" class="a4-container font-sans text-slate-800 transition-all duration-300">
+                <div class="text-center border-b-2 pb-4 mb-4" id="prev-header-border" style="border-color: #2563eb;">
+                    <h1 class="text-4xl font-bold uppercase tracking-wider" id="prev-name">Your Name</h1>
+                    <div class="mt-2 text-sm flex justify-center gap-4 text-slate-600">
+                        <span id="prev-email"><i class="fa-solid fa-envelope mr-1"></i> email@example.com</span>
+                        <span id="prev-phone"><i class="fa-solid fa-phone mr-1"></i> +1 (555) 000-0000</span>
+                    </div>
+                </div>
+
+                <div class="mb-6">
+                    <p id="prev-summary" class="text-sm leading-relaxed text-justify">Your professional summary will appear here. Fill out the form to see the live updates reflected instantly on this document.</p>
+                </div>
+
+                <div class="mb-6">
+                    <h2 class="text-xl font-bold uppercase tracking-widest mb-3" id="prev-exp-title" style="color: #2563eb;">Experience</h2>
+                    <div id="prev-experience-list" class="space-y-4">
+                        <div>
+                            <div class="flex justify-between font-bold text-slate-800">
+                                <span>Job Title</span>
+                                <span>Start - End Date</span>
+                            </div>
+                            <div class="italic text-slate-600 text-sm mb-1">Company Name</div>
+                            <p class="text-sm leading-relaxed">Job responsibilities and achievements.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-6">
+                    <h2 class="text-xl font-bold uppercase tracking-widest mb-3" id="prev-edu-title" style="color: #2563eb;">Education</h2>
+                    <div id="prev-education-list" class="space-y-3">
+                        <div>
+                            <div class="flex justify-between font-bold text-slate-800">
+                                <span>Degree Name</span>
+                                <span>Graduation Year</span>
+                            </div>
+                            <div class="italic text-slate-600 text-sm">Institution Name</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <h2 class="text-xl font-bold uppercase tracking-widest mb-3" id="prev-skills-title" style="color: #2563eb;">Skills</h2>
+                        <ul id="prev-skills-list" class="list-disc list-inside text-sm space-y-1">
+                            <li>Skill 1</li>
+                            <li>Skill 2</li>
+                        </ul>
+                    </div>
+                    <div>
+                        <h2 class="text-xl font-bold uppercase tracking-widest mb-3" id="prev-proj-title" style="color: #2563eb;">Projects / Certs</h2>
+                        <p id="prev-projects" class="text-sm whitespace-pre-line">Your certifications and project details will appear here.</p>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+    </main>
+
+    <div id="ai-loader" class="fixed inset-0 bg-slate-900 bg-opacity-50 z-50 hidden flex flex-col items-center justify-center text-white">
+        <div class="loader mb-4"></div>
+        <h2 class="text-2xl font-bold mb-2">AI is Optimizing...</h2>
+        <p class="text-slate-300">Analyzing bullet points for impact and clarity.</p>
+    </div>
+
+    <script>
+        // --- State Management ---
+        let currentStep = 1;
+        const totalSteps = 5;
+        let expCount = 0;
+        let eduCount = 0;
+
+        // Initialize empty lists
+        window.onload = () => {
+            addExperience(); // Add one blank experience field
+            addEducation();  // Add one blank education field
+            updatePreviewLive();
+        };
+
+        // --- Multi-Step Navigation ---
+        function changeStep(direction) {
+            document.getElementById(`step-${currentStep}`).classList.add('hidden');
+            currentStep += direction;
+            
+            // Bounds check
+            if (currentStep < 1) currentStep = 1;
+            if (currentStep > totalSteps) currentStep = totalSteps;
+
+            document.getElementById(`step-${currentStep}`).classList.remove('hidden');
+            
+            // Update UI
+            updateStepUI();
+        }
+
+        function updateStepUI() {
+            const titles = ["Personal Info", "Work Experience", "Education", "Skills & Projects", "Finalize"];
+            document.getElementById('step-indicator').innerText = `Step ${currentStep} of ${totalSteps}`;
+            document.getElementById('step-title').innerText = titles[currentStep - 1];
+            document.getElementById('progress-bar').style.width = `${(currentStep / totalSteps) * 100}%`;
+
+            // Buttons
+            document.getElementById('btn-prev').classList.toggle('hidden', currentStep === 1);
+            
+            if (currentStep === totalSteps) {
+                document.getElementById('btn-next').classList.add('hidden');
+                document.getElementById('btn-download').classList.remove('hidden');
+            } else {
+                document.getElementById('btn-next').classList.remove('hidden');
+                document.getElementById('btn-download').classList.add('hidden');
+            }
+        }
+
+        // --- Dynamic Form Fields ---
+        function addExperience() {
+            expCount++;
+            const container = document.getElementById('experience-container');
+            const div = document.createElement('div');
+            div.className = "p-4 border border-slate-200 rounded-md bg-slate-50 exp-item relative";
+            div.innerHTML = `
+                <button type="button" onclick="this.parentElement.remove(); updatePreviewLive();" class="absolute top-2 right-2 text-red-500 hover:text-red-700"><i class="fa-solid fa-trash"></i></button>
+                <div class="grid grid-cols-2 gap-4 mb-3">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1">Job Title</label>
+                        <input type="text" class="exp-title w-full px-2 py-1 border border-slate-300 rounded text-sm focus:ring-1 focus:ring-primary" placeholder="Software Engineer">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1">Company</label>
+                        <input type="text" class="exp-company w-full px-2 py-1 border border-slate-300 rounded text-sm focus:ring-1 focus:ring-primary" placeholder="Google">
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="block text-xs font-medium text-slate-700 mb-1">Dates</label>
+                    <input type="text" class="exp-dates w-full px-2 py-1 border border-slate-300 rounded text-sm focus:ring-1 focus:ring-primary" placeholder="Jan 2020 - Present">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 mb-1">Responsibilities / Achievements</label>
+                    <textarea class="exp-desc w-full px-2 py-1 border border-slate-300 rounded text-sm focus:ring-1 focus:ring-primary" rows="3" placeholder="- Developed scalable microservices..."></textarea>
+                </div>
+            `;
+            container.appendChild(div);
+        }
+
+        function addEducation() {
+            eduCount++;
+            const container = document.getElementById('education-container');
+            const div = document.createElement('div');
+            div.className = "p-4 border border-slate-200 rounded-md bg-slate-50 edu-item relative";
+            div.innerHTML = `
+                <button type="button" onclick="this.parentElement.remove(); updatePreviewLive();" class="absolute top-2 right-2 text-red-500 hover:text-red-700"><i class="fa-solid fa-trash"></i></button>
+                <div class="mb-3">
+                    <label class="block text-xs font-medium text-slate-700 mb-1">Degree / Certificate</label>
+                    <input type="text" class="edu-degree w-full px-2 py-1 border border-slate-300 rounded text-sm focus:ring-1 focus:ring-primary" placeholder="B.S. Computer Science">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1">Institution</label>
+                        <input type="text" class="edu-school w-full px-2 py-1 border border-slate-300 rounded text-sm focus:ring-1 focus:ring-primary" placeholder="University of Tech">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 mb-1">Graduation Date</label>
+                        <input type="text" class="edu-dates w-full px-2 py-1 border border-slate-300 rounded text-sm focus:ring-1 focus:ring-primary" placeholder="May 2022">
+                    </div>
+                </div>
+            `;
+            container.appendChild(div);
+        }
+
+        // --- Live Preview & Formatting ---
+        function updatePreviewLive() {
+            // Personal
+            document.getElementById('prev-name').innerText = document.getElementById('p-name').value || 'Your Name';
+            document.getElementById('prev-email').innerHTML = `<i class="fa-solid fa-envelope mr-1"></i> ${document.getElementById('p-email').value || 'email@example.com'}`;
+            document.getElementById('prev-phone').innerHTML = `<i class="fa-solid fa-phone mr-1"></i> ${document.getElementById('p-phone').value || '+1 (555) 000-0000'}`;
+            document.getElementById('prev-summary').innerText = document.getElementById('p-summary').value || 'Your professional summary will appear here.';
+
+            // Theme Formatting
+            const themeColor = document.getElementById('f-color').value;
+            document.getElementById('prev-header-border').style.borderColor = themeColor;
+            document.getElementById('prev-exp-title').style.color = themeColor;
+            document.getElementById('prev-edu-title').style.color = themeColor;
+            document.getElementById('prev-skills-title').style.color = themeColor;
+            document.getElementById('prev-proj-title').style.color = themeColor;
+
+            const fontClass = document.getElementById('f-font').value;
+            const doc = document.getElementById('resume-document');
+            doc.className = `a4-container text-slate-800 transition-all duration-300 ${fontClass}`;
+
+            // Experience
+            const expList = document.getElementById('prev-experience-list');
+            expList.innerHTML = '';
+            document.querySelectorAll('.exp-item').forEach(item => {
+                const title = item.querySelector('.exp-title').value;
+                const company = item.querySelector('.exp-company').value;
+                const dates = item.querySelector('.exp-dates').value;
+                let desc = item.querySelector('.exp-desc').value;
+                
+                // Convert dashes/newlines to bullet points html
+                if(desc) {
+                    const bullets = desc.split('\n').filter(b => b.trim() !== '').map(b => `<li class="ml-4 list-[circle]">${b.replace(/^-/,'').trim()}</li>`).join('');
+                    desc = `<ul class="mt-1">${bullets}</ul>`;
+                }
+
+                if (title || company || dates || desc) {
+                    expList.innerHTML += `
+                        <div class="mb-3">
+                            <div class="flex justify-between font-bold text-slate-800">
+                                <span>${title || 'Job Title'}</span>
+                                <span class="font-normal text-sm">${dates || 'Dates'}</span>
+                            </div>
+                            <div class="italic text-slate-600 text-sm mb-1">${company || 'Company'}</div>
+                            <div class="text-sm leading-relaxed">${desc || 'Responsibilities and achievements.'}</div>
+                        </div>
+                    `;
+                }
+            });
+
+            // Education
+            const eduList = document.getElementById('prev-education-list');
+            eduList.innerHTML = '';
+            document.querySelectorAll('.edu-item').forEach(item => {
+                const degree = item.querySelector('.edu-degree').value;
+                const school = item.querySelector('.edu-school').value;
+                const dates = item.querySelector('.edu-dates').value;
+
+                if (degree || school || dates) {
+                    eduList.innerHTML += `
+                        <div class="mb-2">
+                            <div class="flex justify-between font-bold text-slate-800">
+                                <span>${degree || 'Degree'}</span>
+                                <span class="font-normal text-sm">${dates || 'Dates'}</span>
+                            </div>
+                            <div class="italic text-slate-600 text-sm">${school || 'Institution'}</div>
+                        </div>
+                    `;
+                }
+            });
+
+            // Skills & Projects
+            const skillsRaw = document.getElementById('s-skills').value;
+            const skillsList = document.getElementById('prev-skills-list');
+            if (skillsRaw) {
+                skillsList.innerHTML = skillsRaw.split(',').map(s => `<li>${s.trim()}</li>`).join('');
+            } else {
+                skillsList.innerHTML = '<li>Skill 1</li><li>Skill 2</li>';
+            }
+
+            document.getElementById('prev-projects').innerText = document.getElementById('s-projects').value || 'Your certifications and project details will appear here.';
+        }
+
+        // Listen for format changes
+        document.getElementById('f-color').addEventListener('input', updatePreviewLive);
+        document.getElementById('f-font').addEventListener('change', updatePreviewLive);
+
+        // --- AI Optimization Simulation ---
+        function triggerAIOptimization() {
+            // Show Loader
+            const loader = document.getElementById('ai-loader');
+            loader.classList.remove('hidden');
+
+            // Simulate API Call delay (3 seconds)
+            setTimeout(() => {
+                const expItems = document.querySelectorAll('.exp-item');
+                expItems.forEach(item => {
+                    const descBox = item.querySelector('.exp-desc');
+                    let currentText = descBox.value;
+                    
+                    if (currentText.trim().length > 5) {
+                        // Simulated AI action: Enhancing verbs and metrics
+                        let optimized = currentText
+                            .replace(/worked on/gi, 'Spearheaded development of')
+                            .replace(/made/gi, 'Architected and deployed')
+                            .replace(/helped/gi, 'Collaborated to accelerate')
+                            .replace(/good/gi, 'exceptional')
+                            .replace(/did/gi, 'Executed');
+                        
+                        // Just an arbitrary check to make it look "AI" modified
+                        if (!optimized.includes('Spearheaded') && !optimized.includes('Architected')) {
+                           optimized = optimized.split('\n').map(line => {
+                               if (line.trim().startsWith('-')) return line; // Leave alone if user already formatted
+                               return `- Optimized workflows resulting in measurable performance gains.\n- ${line}`;
+                           }).join('\n');
+                        }
+                        descBox.value = optimized;
+                    }
+                });
+
+                // Update Preview
+                updatePreviewLive();
+
+                // Hide Loader and alert user
+                loader.classList.add('hidden');
+                alert("AI Optimization Complete! Your bullet points have been enhanced for impact.");
+            }, 3000);
+        }
+
+        // --- Download Functionality ---
+        function downloadResume() {
+            const element = document.getElementById('resume-document');
+            
+            // Adjust styling slightly for PDF export to ensure exact fit
+            const opt = {
+                margin:       0,
+                filename:     `${document.getElementById('p-name').value.replace(/\s+/g, '_') || 'Resume'}.pdf`,
+                image:        { type: 'jpeg', quality: 0.98 },
+                html2canvas:  { scale: 2, useCORS: true },
+                jsPDF:        { unit: 'px', format: 'a4', orientation: 'portrait' }
+            };
+
+            // Temporarily remove shadow for clean print
+            const originalBoxShadow = element.style.boxShadow;
+            element.style.boxShadow = 'none';
+
+            html2pdf().set(opt).from(element).save().then(() => {
+                // Restore styling
+                element.style.boxShadow = originalBoxShadow;
+            });
+        }
+
+        // --- LocalStorage Save/Load ---
+        function saveProgress() {
+            const formData = {
+                personal: {
+                    name: document.getElementById('p-name').value,
+                    email: document.getElementById('p-email').value,
+                    phone: document.getElementById('p-phone').value,
+                    summary: document.getElementById('p-summary').value
+                },
+                skills: document.getElementById('s-skills').value,
+                projects: document.getElementById('s-projects').value,
+                formatting: {
+                    color: document.getElementById('f-color').value,
+                    font: document.getElementById('f-font').value
+                },
+                experience: [],
+                education: []
+            };
+
+            document.querySelectorAll('.exp-item').forEach(item => {
+                formData.experience.push({
+                    title: item.querySelector('.exp-title').value,
+                    company: item.querySelector('.exp-company').value,
+                    dates: item.querySelector('.exp-dates').value,
+                    desc: item.querySelector('.exp-desc').value
+                });
+            });
+
+            document.querySelectorAll('.edu-item').forEach(item => {
+                formData.education.push({
+                    degree: item.querySelector('.edu-degree').value,
+                    school: item.querySelector('.edu-school').value,
+                    dates: item.querySelector('.edu-dates').value
+                });
+            });
+
+            localStorage.setItem('resumeData', JSON.stringify(formData));
+            alert('Progress Saved Successfully!');
+        }
+
+        function loadProgress() {
+            const saved = localStorage.getItem('resumeData');
+            if (!saved) {
+                alert('No saved progress found.');
+                return;
+            }
+
+            const data = JSON.parse(saved);
+
+            // Populate Personal
+            document.getElementById('p-name').value = data.personal.name || '';
+            document.getElementById('p-email').value = data.personal.email || '';
+            document.getElementById('p-phone').value = data.personal.phone || '';
+            document.getElementById('p-summary').value = data.personal.summary || '';
+
+            // Populate Skills/Projects/Format
+            document.getElementById('s-skills').value = data.skills || '';
+            document.getElementById('s-projects').value = data.projects || '';
+            document.getElementById('f-color').value = data.formatting.color || '#2563eb';
+            document.getElementById('f-font').value = data.formatting.font || 'font-sans';
+
+            // Populate Experience
+            const expContainer = document.getElementById('experience-container');
+            expContainer.innerHTML = ''; // clear current
+            data.experience.forEach(exp => {
+                addExperience();
+                const lastExp = expContainer.lastElementChild;
+                lastExp.querySelector('.exp-title').value = exp.title;
+                lastExp.querySelector('.exp-company').value = exp.company;
+                lastExp.querySelector('.exp-dates').value = exp.dates;
+                lastExp.querySelector('.exp-desc').value = exp.desc;
+            });
+
+            // Populate Education
+            const eduContainer = document.getElementById('education-container');
+            eduContainer.innerHTML = '';
+            data.education.forEach(edu => {
+                addEducation();
+                const lastEdu = eduContainer.lastElementChild;
+                lastEdu.querySelector('.edu-degree').value = edu.degree;
+                lastEdu.querySelector('.edu-school').value = edu.school;
+                lastEdu.querySelector('.edu-dates').value = edu.dates;
+            });
+
+            updatePreviewLive();
+            alert('Progress Loaded!');
+        }
+    </script>
+</body>
+</html>
